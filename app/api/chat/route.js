@@ -152,6 +152,25 @@ export async function POST(req) {
     ? ["provinsi", "kabupaten"]
     : ["kabupaten", "provinsi"];
 
+  // Varian kueri: mesin pencari BPS sensitif tanda hubung — "rata-rata lama
+  // sekolah" menghasilkan 0 hasil, "rata rata lama sekolah" menemukan tabelnya.
+  const variants = [];
+  {
+    const seen = new Set();
+    for (const v of [
+      keywords.join(" "),
+      keywords.join(" ").replace(/-/g, " "),
+      altKeywords,
+      altKeywords.replace(/-/g, " "),
+    ]) {
+      const key = v.trim().replace(/\s+/g, " ");
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        variants.push(key);
+      }
+    }
+  }
+
   // Coba tiap sumber berurutan: kabupaten dulu, lalu provinsi Jambi.
   // Pindah sumber bila: pencarian kosong, hasil terbaik tidak relevan,
   // atau tabel tidak bisa diambil.
@@ -159,9 +178,9 @@ export async function POST(req) {
   for (const siteKey of SITE_ORDER) {
     let results = [];
     try {
-      results = await bpsSearch(keywords.join(" "), siteKey);
-      if (!results.length && altKeywords && altKeywords !== keywords.join(" ")) {
-        results = await bpsSearch(altKeywords, siteKey);
+      for (const v of variants) {
+        results = await bpsSearch(v, siteKey);
+        if (results.length) break;
       }
     } catch {
       continue;
