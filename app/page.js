@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 const EXAMPLES = [
   { icon: "📈", label: "Tren IPM 2020–2025", query: "Tren IPM Tanjung Jabung Barat 2020–2025" },
   { icon: "👥", label: "Jumlah Penduduk", query: "Berapa jumlah penduduk Tanjung Jabung Barat?" },
-  { icon: "📉", label: "Kemiskinan 2025", query: "Persentase penduduk miskin Tanjung Jabung Barat 2025" },
+  { icon: "📉", label: "Kemiskinan Terbaru", query: "Berapa persentase penduduk miskin Tanjung Jabung Barat?" },
   { icon: "🎓", label: "Harapan Lama Sekolah", query: "Berapa HLS Tanjung Jabung Barat 2024?" },
   { icon: "💼", label: "Pengangguran Terbuka", query: "Tingkat Pengangguran Terbuka Tanjung Jabung Barat" },
   { icon: "🌾", label: "Pertanian & Sawit", query: "Data produksi pertanian perkebunan kelapa sawit Tanjung Jabung Barat" },
