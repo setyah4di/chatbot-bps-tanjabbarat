@@ -1,9 +1,12 @@
 // app/api/chat/route.js — otak chatbot: terjemahkan pertanyaan → data BPS
+// Sumber utama: situs BPS Kabupaten Tanjung Jabung Barat; jika data tidak ada,
+// otomatis dicari di situs BPS Provinsi Jambi.
 import {
   bpsSearch,
   fetchTableData,
   buildTableAnswer,
   tableYearsAvailable,
+  siteFromUrl,
 } from "../../../lib/bps";
 
 export const runtime = "nodejs";
@@ -105,7 +108,7 @@ function rankResults(results, keywords) {
 function answerNonTable(r) {
   const typeLabel = { press: "Siaran pers", publication: "Publikasi", infographic: "Infografis", other: "Halaman" };
   return {
-    answer: `Yang paling relevan dari situs BPS Kabupaten Tanjung Jabung Barat:\n\n**${r.title}**\n${r.desc ? r.desc + "\n" : ""}\nBaca lengkap: ${r.url}`,
+    answer: `Yang paling relevan dari situs ${siteFromUrl(r.url).label}:\n\n**${r.title}**\n${r.desc ? r.desc + "\n" : ""}\nBaca lengkap: ${r.url}`,
     links: [r.url],
   };
 }
@@ -114,11 +117,15 @@ function answerNoResult(keywords) {
   return {
     answer:
       keywords.length
-        ? `Tidak menemukan data yang cocok untuk "${keywords.join(" ")}" di situs BPS Tanjung Jabung Barat. Coba gunakan istilah lain, misalnya "kemiskinan", "penduduk", "ipm", "padi", atau "inflasi".`
+        ? `Tidak menemukan data yang cocok untuk "${keywords.join(" ")}" baik di situs BPS Tanjung Jabung Barat maupun BPS Provinsi Jambi. Coba gunakan istilah lain, misalnya "kemiskinan", "penduduk", "ipm", "padi", atau "inflasi".`
         : "Tulis pertanyaan data yang ingin dicari, misalnya: *Berapa jumlah penduduk Tanjung Jabung Barat 2024?*",
     links: [],
   };
 }
+
+// Catatan transparansi ketika jawaban berasal dari situs provinsi sebagai cadangan.
+const FALLBACK_NOTE =
+  "Data tidak tersedia di situs BPS Kabupaten Tanjung Jabung Barat — berikut dari situs BPS Provinsi Jambi:";
 
 export async function POST(req) {
   let message = "";
@@ -137,68 +144,104 @@ export async function POST(req) {
   const keywords = extractKeywords(message);
   const isTrend = TREND_WORDS.test(message);
 
-  let results = [];
-  try {
-    results = await bpsSearch(keywords.join(" "));
-    if (!results.length) {
-      const alt = extractKeywords(message, false).join(" ");
-      if (alt && alt !== keywords.join(" ")) results = await bpsSearch(alt);
+  const altKeywords = extractKeywords(message, false).join(" ");
+
+  // Urutan sumber: kabupaten dulu, provinsi Jambi sebagai cadangan.
+  // Jika pertanyaan eksplisit menyebut provinsi Jambi, provinsi diutamakan.
+  const SITE_ORDER = regions.has("provinsi jambi")
+    ? ["provinsi", "kabupaten"]
+    : ["kabupaten", "provinsi"];
+
+  // Coba tiap sumber berurutan: kabupaten dulu, lalu provinsi Jambi.
+  // Pindah sumber bila: pencarian kosong, hasil terbaik tidak relevan,
+  // atau tabel tidak bisa diambil.
+  let response = null;
+  for (const siteKey of SITE_ORDER) {
+    let results = [];
+    try {
+      results = await bpsSearch(keywords.join(" "), siteKey);
+      if (!results.length && altKeywords && altKeywords !== keywords.join(" ")) {
+        results = await bpsSearch(altKeywords, siteKey);
+      }
+    } catch {
+      continue;
     }
-  } catch {
-    return Response.json({
-      answer: "Gagal menghubungi mesin pencari BPS. Coba lagi beberapa saat.",
-      links: [],
-    });
-  }
-  if (!results.length) return Response.json(answerNoResult(keywords));
+    if (!results.length) continue;
 
-  const ranked = rankResults(results, keywords);
-  const best = ranked[0];
+    const ranked = rankResults(results, keywords);
+    const best = ranked[0];
 
-  if (best.type !== "table") return Response.json(answerNonTable(best));
-
-  // Tahun yang diminta: jika pertanyaan tren tanpa menyebut tahun, ambil 6 tahun terakhir.
-  let wantYears = years;
-  if (isTrend && wantYears.length < 2) {
-    const available = await tableYearsAvailableSafe(best.url);
-    if (available.length > 1) {
-      const last = available.slice(-6).map(Number);
-      wantYears = last;
+    if (best.type !== "table") {
+      const titleLower = best.title.toLowerCase();
+      const relevant = keywords.some((k) => titleLower.includes(k));
+      if (!relevant) continue; // tidak relevan → coba sumber berikutnya
+      const r = answerNonTable(best);
+      if (siteKey === "provinsi" && !regions.has("provinsi jambi")) {
+        r.answer = `${FALLBACK_NOTE}\n\n${r.answer}`;
+      }
+      response = r;
+      break;
     }
-  }
-  wantYears = wantYears.map(Number).filter((y) => y >= 1990 && y <= new Date().getFullYear() + 1);
 
-  let table;
-  try {
-    table = await fetchTableData(best.url, wantYears);
-  } catch {
-    table = null;
-  }
-  if (!table) return Response.json(answerNonTable(best));
-
-  // Urut naik, batasi 6 tahun. Jika pengguna menyebut tahun tertentu,
-  // tampilkan hanya tahun itu (tahun yang datanya tak ada tetap dicatat).
-  const have = years.length
-    ? years.map(Number).slice(0, 6)
-    : Object.keys(table.byYear)
-        .map(Number)
-        .sort((a, b) => a - b)
-        .slice(0, 6);
-  if (!have.length) return Response.json(answerNonTable(best));
-
-  const answer = buildTableAnswer(
-    { ...table, url: best.url },
-    have,
-    {
-      regionFilter: regions.size ? regions : null,
-      withDef: false,
-      prefer: keywords.map((k) => k.toLowerCase()),
+    // Tahun yang diminta: jika pertanyaan tren tanpa menyebut tahun, ambil 6 tahun terakhir.
+    let wantYears = years;
+    if (isTrend && wantYears.length < 2) {
+      const available = await tableYearsAvailableSafe(best.url);
+      if (available.length > 1) {
+        const last = available.slice(-6).map(Number);
+        wantYears = last;
+      }
     }
-  );
-  return Response.json({
-    answer,
-    links: [best.url, ...ranked.slice(1, 4).map((r) => r.url)].filter(Boolean),
-  });
+    wantYears = wantYears.map(Number).filter((y) => y >= 1990 && y <= new Date().getFullYear() + 1);
+
+    let table;
+    try {
+      table = await fetchTableData(best.url, wantYears);
+    } catch {
+      table = null;
+    }
+    if (!table) continue; // tabel gagal diambil → coba sumber berikutnya
+
+    // Urut naik, batasi 6 tahun. Jika pengguna menyebut tahun tertentu,
+    // tampilkan hanya tahun itu (tahun yang datanya tak ada tetap dicatat).
+    const have = years.length
+      ? years.map(Number).slice(0, 6)
+      : Object.keys(table.byYear)
+          .map(Number)
+          .sort((a, b) => a - b)
+          .slice(0, 6);
+    if (!have.length) continue;
+
+    // Filter wilayah hanya dipakai bila tabel memuat wilayah tersebut;
+    // tabel provinsi yang tak punya baris kabupaten diminta → tampilkan semua.
+    let regionFilter = regions.size ? regions : null;
+    if (regionFilter && Array.isArray(table.meta.vervar)) {
+      const labels = table.meta.vervar.map((v) => (v.label || "").toLowerCase());
+      const any = [...regionFilter].some((r) => labels.includes(r));
+      if (!any) regionFilter = null;
+    }
+
+    const answer = buildTableAnswer(
+      { ...table, url: best.url },
+      have,
+      {
+        regionFilter,
+        withDef: false,
+        prefer: keywords.map((k) => k.toLowerCase()),
+      }
+    );
+    const full =
+      siteKey === "provinsi" && !regions.has("provinsi jambi")
+        ? `${FALLBACK_NOTE}\n\n${answer}`
+        : answer;
+    response = {
+      answer: full,
+      links: [best.url, ...ranked.slice(1, 4).map((r) => r.url)].filter(Boolean),
+    };
+    break;
+  }
+
+  return Response.json(response || answerNoResult(keywords));
 }
 
 async function tableYearsAvailableSafe(url) {
