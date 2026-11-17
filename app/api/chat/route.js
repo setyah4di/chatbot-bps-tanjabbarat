@@ -155,6 +155,8 @@ export async function POST(req) {
   const ranked = rankResults(results, keywords);
   const best = ranked[0];
 
+  if (best.type !== "table") return Response.json(answerNonTable(best));
+
   // Tahun yang diminta: jika pertanyaan tren tanpa menyebut tahun, ambil 6 tahun terakhir.
   let wantYears = years;
   if (isTrend && wantYears.length < 2) {
@@ -166,40 +168,26 @@ export async function POST(req) {
   }
   wantYears = wantYears.map(Number).filter((y) => y >= 1990 && y <= new Date().getFullYear() + 1);
 
-  // Cari kandidat hasil yang bertipe "table"
-  const tableCandidates = ranked.filter((r) => r.type === "table");
-  let table = null;
-  let chosenResult = best;
-
-  if (tableCandidates.length) {
-    for (const cand of tableCandidates.slice(0, 2)) {
-      try {
-        table = await fetchTableData(cand.url, wantYears);
-        if (table && table.meta) {
-          chosenResult = cand;
-          break;
-        }
-      } catch (err) {
-        console.error("fetchTableData error:", err);
-      }
-    }
+  let table;
+  try {
+    table = await fetchTableData(best.url, wantYears);
+  } catch {
+    table = null;
   }
-
-  // Jika tetap tidak ada tabel yang berhasil diambil datanya, fallback ke non-table
   if (!table) return Response.json(answerNonTable(best));
 
   // Urut naik, batasi 6 tahun. Jika pengguna menyebut tahun tertentu,
   // tampilkan hanya tahun itu (tahun yang datanya tak ada tetap dicatat).
   const have = years.length
     ? years.map(Number).slice(0, 6)
-    : Object.keys(table.byYear || {})
+    : Object.keys(table.byYear)
         .map(Number)
         .sort((a, b) => a - b)
         .slice(0, 6);
-  if (!have.length) return Response.json(answerNonTable(chosenResult));
+  if (!have.length) return Response.json(answerNonTable(best));
 
   const answer = buildTableAnswer(
-    { ...table, url: chosenResult.url },
+    { ...table, url: best.url },
     have,
     {
       regionFilter: regions.size ? regions : null,
@@ -209,7 +197,7 @@ export async function POST(req) {
   );
   return Response.json({
     answer,
-    links: [chosenResult.url, ...ranked.slice(1, 4).map((r) => r.url)].filter(Boolean),
+    links: [best.url, ...ranked.slice(1, 4).map((r) => r.url)].filter(Boolean),
   });
 }
 

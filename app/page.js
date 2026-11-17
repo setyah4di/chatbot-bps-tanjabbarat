@@ -237,7 +237,7 @@ function BotMessage({ text }) {
 
 const INITIAL_MESSAGE = {
   role: "bot",
-  time: getCurrentTime(),
+  time: "",
   text:
     "Halo! Selamat datang di **Chatbot Data Statistik BPS Tanjung Jabung Barat** 👋\n\nSaya siap membantu Anda menemukan data resmi Kabupaten Tanjung Jabung Barat, seperti:\n- **Indeks Pembangunan Manusia (IPM)**\n- **Kependudukan & Ketenagakerjaan**\n- **Kemiskinan & Garis Kemiskinan**\n- **Pendidikan (HLS & RLS)**\n- **Pertanian, Perkebunan, dan PDRB**\n\nSilakan pilih salah satu pertanyaan populer di bawah atau ketik langsung pertanyaan Anda!",
 };
@@ -263,6 +263,12 @@ export default function Page() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, loading]);
+
+  useEffect(() => {
+    setMessages((prev) =>
+      prev.map((msg, idx) => (idx === 0 && !msg.time ? { ...msg, time: getCurrentTime() } : msg))
+    );
+  }, []);
 
   const handleScroll = () => {
     if (!chatRef.current) return;
@@ -385,8 +391,12 @@ export default function Page() {
                 <span className="msg-author">
                   {m.role === "user" ? "Anda" : "Asisten Statistik BPS"}
                 </span>
-                <span>•</span>
-                <span>{m.time || getCurrentTime()}</span>
+                {m.time && (
+                  <>
+                    <span>•</span>
+                    <span suppressHydrationWarning>{m.time}</span>
+                  </>
+                )}
               </div>
 
               <div className={`msg ${m.role === "user" ? "user" : "bot"}`}>
