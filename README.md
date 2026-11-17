@@ -11,6 +11,11 @@ dengan [BPS Provinsi Jambi](https://jambi.bps.go.id/id) sebagai sumber cadangan.
   tabel gagal diambil, otomatis dicari di situs provinsi Jambi (dengan catatan sumber).
   Jika pertanyaan eksplisit menyebut "provinsi jambi", situs provinsi diutamakan.
 - Data tabel: diambil dari payload Next.js (flight) halaman statistics-table.
+- Jalur cadangan: bila situs BPS menolak IP server hosting (Cloudflare 403 untuk
+  IP datacenter seperti Vercel), data tabel diambil lewat WebAPI resmi BPS
+  (`webapi.bps.go.id`) memakai kunci gratis di env `BPS_WEBAPI_KEY`.
+  Daftar kunci: daftar di https://webapi.bps.go.id, lalu set env var
+  `BPS_WEBAPI_KEY` (lokal: file `.env.local`; Vercel: Settings → Environment Variables).
 - Ganti tahun: POST server-action ke halaman tabel yang sama (id aksi build-specific; jika BPS redeploy dan ganti tahun gagal, chatbot memakai tahun default tersedia dengan catatan).
 - Jawaban berupa teks + tabel markdown + tautan sumber + tanggal pembaruan.
 
