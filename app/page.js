@@ -78,6 +78,24 @@ function CheckIcon() {
   );
 }
 
+function RotateCcwIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+    </svg>
+  );
+}
+
+function CloseIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
 // Inline renderer: Bold, Italic, Inline Code, Links
 function renderInline(text, keyBase) {
   const parts = [];
@@ -229,6 +247,7 @@ export default function Page() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
   const chatRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -252,13 +271,30 @@ export default function Page() {
     setShowScrollBottom(isUp);
   };
 
-  const resetChat = () => {
-    if (window.confirm("Mulai percakapan baru? Riwayat obrolan akan dibersihkan.")) {
-      setMessages([{ ...INITIAL_MESSAGE, time: getCurrentTime() }]);
-      setInput("");
-      if (inputRef.current) inputRef.current.focus();
-    }
+  const handleOpenResetModal = () => {
+    setShowResetModal(true);
   };
+
+  const handleCloseResetModal = () => {
+    setShowResetModal(false);
+  };
+
+  const handleConfirmReset = () => {
+    setMessages([{ ...INITIAL_MESSAGE, time: getCurrentTime() }]);
+    setInput("");
+    setShowResetModal(false);
+    if (inputRef.current) inputRef.current.focus();
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && showResetModal) {
+        setShowResetModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showResetModal]);
 
   async function send(text) {
     const q = (text || input).trim();
@@ -319,7 +355,7 @@ export default function Page() {
         </div>
 
         <div className="header-actions">
-          <button className="header-btn" onClick={resetChat} title="Mulai sesi obrolan baru">
+          <button className="header-btn" onClick={handleOpenResetModal} title="Mulai sesi obrolan baru">
             <RefreshIcon />
             <span>Mulai Ulang</span>
           </button>
@@ -454,6 +490,64 @@ export default function Page() {
         </a>
         . Informasi disajikan secara otomatis untuk kemudahan akses data publik.
       </footer>
+
+      {/* Pop-up Konfirmasi Dialog Mulai Ulang */}
+      {showResetModal && (
+        <div
+          className="modal-overlay"
+          onClick={handleCloseResetModal}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reset-modal-title"
+        >
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="modal-close-btn"
+              onClick={handleCloseResetModal}
+              title="Tutup dialog"
+            >
+              <CloseIcon />
+            </button>
+
+            <div className="modal-icon-wrapper">
+              <RotateCcwIcon />
+            </div>
+
+            <h2 id="reset-modal-title" className="modal-title">
+              Mulai Ulang Percakapan?
+            </h2>
+
+            <p className="modal-desc">
+              Riwayat obrolan tanya jawab saat ini akan dibersihkan dan chatbot akan kembali ke tampilan awal.
+            </p>
+
+            <div className="modal-note">
+              <span className="modal-note-icon">💡</span>
+              <span>Anda dapat langsung menanyakan data statistik terbaru dari BPS setelah sesi direset.</span>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="modal-btn modal-btn-cancel"
+                onClick={handleCloseResetModal}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                className="modal-btn modal-btn-confirm"
+                onClick={handleConfirmReset}
+                autoFocus
+              >
+                <RefreshIcon />
+                <span>Ya, Mulai Ulang</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
