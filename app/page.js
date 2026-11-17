@@ -3,12 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 
 const EXAMPLES = [
-  { icon: "📈", label: "Tren IPM 2020–2025", query: "Tren IPM Tanjung Jabung Barat 2020–2025" },
-  { icon: "👥", label: "Jumlah Penduduk", query: "Berapa jumlah penduduk Tanjung Jabung Barat?" },
-  { icon: "📉", label: "Kemiskinan Terbaru", query: "Berapa persentase penduduk miskin Tanjung Jabung Barat?" },
-  { icon: "🎓", label: "Harapan Lama Sekolah", query: "Berapa HLS Tanjung Jabung Barat 2024?" },
-  { icon: "💼", label: "Pengangguran Terbuka", query: "Tingkat Pengangguran Terbuka Tanjung Jabung Barat" },
-  { icon: "🌾", label: "Pertanian & Sawit", query: "Data produksi pertanian perkebunan kelapa sawit Tanjung Jabung Barat" },
+  { icon: "📈", label: "Tren IPM", query: "Tren IPM Tanjung Jabung Barat" },
+  { icon: "📊", label: "Pertumbuhan Ekonomi (PDRB)", query: "Laju pertumbuhan ekonomi PDRB Tanjung Jabung Barat" },
+  { icon: "📉", label: "Persentase Kemiskinan", query: "Berapa persentase penduduk miskin Tanjung Jabung Barat?" },
+  { icon: "🏷️", label: "Garis Kemiskinan", query: "Berapa garis kemiskinan Tanjung Jabung Barat?" },
+  { icon: "💼", label: "Pengangguran Terbuka (TPT)", query: "Tingkat Pengangguran Terbuka Tanjung Jabung Barat" },
+  { icon: "🎓", label: "Harapan Lama Sekolah (HLS)", query: "Harapan lama sekolah Tanjung Jabung Barat" },
+  { icon: "📚", label: "Rata-rata Lama Sekolah (RLS)", query: "Rata rata lama sekolah Tanjung Jabung Barat" },
+  { icon: "🏥", label: "Umur Harapan Hidup (UHH)", query: "Umur harapan hidup Tanjung Jabung Barat" },
+  { icon: "🌾", label: "Perkebunan Kelapa Sawit", query: "Data produksi pertanian perkebunan kelapa sawit Tanjung Jabung Barat" },
+  { icon: "⚖️", label: "Gini Ratio / Ketimpangan", query: "Gini ratio ketimpangan Tanjung Jabung Barat" },
 ];
 
 function getCurrentTime() {
@@ -239,7 +243,7 @@ const INITIAL_MESSAGE = {
   role: "bot",
   time: "",
   text:
-    "Halo! Selamat datang di **Chatbot Data Statistik BPS Tanjung Jabung Barat** 👋\n\nSaya siap membantu Anda menemukan data resmi Kabupaten Tanjung Jabung Barat, seperti:\n- **Indeks Pembangunan Manusia (IPM)**\n- **Kependudukan & Ketenagakerjaan**\n- **Kemiskinan & Garis Kemiskinan**\n- **Pendidikan (HLS & RLS)**\n- **Pertanian, Perkebunan, dan PDRB**\n\nSilakan pilih salah satu pertanyaan populer di bawah atau ketik langsung pertanyaan Anda!",
+    "Halo! Selamat datang di **Chatbot Data Statistik BPS Tanjung Jabung Barat** 👋\n\nSaya siap membantu Anda menemukan data resmi Kabupaten Tanjung Jabung Barat, seperti:\n- **Indeks Pembangunan Manusia (IPM)**\n- **Pertumbuhan Ekonomi & PDRB**\n- **Kemiskinan & Garis Kemiskinan**\n- **Ketenagakerjaan & Pengangguran (TPT)**\n- **Pendidikan (HLS & RLS)**\n- **Kesehatan (Umur Harapan Hidup)**\n- **Pertanian, Perkebunan & Ketimpangan (Gini)**\n\nSilakan pilih salah satu pertanyaan populer di bawah atau ketik langsung pertanyaan Anda!",
 };
 
 export default function Page() {
