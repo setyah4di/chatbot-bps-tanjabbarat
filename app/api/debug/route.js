@@ -54,7 +54,27 @@ export async function GET(req) {
   for (const site of Object.values(SITES)) {
     results.push(await probe(site, q));
   }
-  return Response.json({ time: new Date().toISOString(), q, results }, {
+  // Probe halaman tabel (seperti yang dilakukan chatbot saat menjawab)
+  const tableProbes = [];
+  for (const [name, url] of [
+    ["kab-RLS", "https://tanjabbarkab.bps.go.id/id/statistics-table/2/NTUjMg==/metode-baru-rata-rata-lama-sekolah-tahun.html"],
+    ["prov-IHK", "https://jambi.bps.go.id/id/statistics-table/2/MzYjMg==/indeks-harga-konsumen-ihk-kota-jambi-2018-equal-100-tahun-2025.html"],
+  ]) {
+    const out = { name };
+    try {
+      const res = await fetch(url, { headers: { "User-Agent": UA }, cache: "no-store" });
+      out.status = res.status;
+      const html = await res.text();
+      out.length = html.length;
+      out.hasFlight = html.includes('"data":{') || html.includes('\\"data\\":{');
+      out.challenge = /just a moment|attention required|cf-browser-verification|enable javascript/i.test(html.slice(0, 3000));
+      out.head = html.slice(0, 100).replace(/\s+/g, " ");
+    } catch (e) {
+      out.error = String(e).slice(0, 120);
+    }
+    tableProbes.push(out);
+  }
+  return Response.json({ time: new Date().toISOString(), q, results, tableProbes }, {
     headers: { "cache-control": "no-store" },
   });
 }
