@@ -2,7 +2,7 @@
 // Buka /api/debug (q=inflasi) atau /api/debug?q=ipm untuk melihat status HTTP,
 // cookie, host tiap kartu hasil, dan jumlah hasil setelah filter host,
 // dari mesin pencari BPS untuk kedua situs (kabupaten & provinsi).
-import { SITES, parseSearchHtml } from "../../../lib/bps";
+import { SITES, parseSearchHtml, RELAYS, isChallengeHtml } from "../../../lib/bps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,7 +54,8 @@ export async function GET(req) {
   for (const site of Object.values(SITES)) {
     results.push(await probe(site, q));
   }
-  // Probe halaman tabel (seperti yang dilakukan chatbot saat menjawab)
+  // Probe halaman tabel (seperti yang dilakukan chatbot saat menjawab),
+  // plus tes jalur ?url= apa pun: langsung vs relay.
   const tableProbes = [];
   for (const [name, url] of [
     ["kab-RLS", "https://tanjabbarkab.bps.go.id/id/statistics-table/2/NTUjMg==/metode-baru-rata-rata-lama-sekolah-tahun.html"],
@@ -62,19 +63,74 @@ export async function GET(req) {
   ]) {
     const out = { name };
     try {
-      const res = await fetch(url, { headers: { "User-Agent": UA }, cache: "no-store" });
-      out.status = res.status;
-      const html = await res.text();
-      out.length = html.length;
-      out.hasFlight = html.includes('"data":{') || html.includes('\\"data\\":{');
-      out.challenge = /just a moment|attention required|cf-browser-verification|enable javascript/i.test(html.slice(0, 3000));
-      out.head = html.slice(0, 100).replace(/\s+/g, " ");
+      const direct = await fetch(url, {
+        headers: { "User-Agent": UA },
+        cache: "no-store",
+        signal: AbortSignal.timeout(20000),
+      });
+      const html = await direct.text();
+      out.directStatus = direct.status;
+      out.challenge = isChallengeHtml(html);
     } catch (e) {
-      out.error = String(e).slice(0, 120);
+      out.directStatus = "ERR " + String(e).slice(0, 80);
+    }
+    for (let i = 0; i < RELAYS.length; i++) {
+      try {
+        const r = await fetch(RELAYS[i](url), { cache: "no-store", signal: AbortSignal.timeout(20000) });
+        const h = await r.text();
+        out[`relay${i}`] = r.ok && h.length > 1000 && !isChallengeHtml(h) ? `OK ${h.length}B` : `gagal(${r.status},${h.length}B)`;
+      } catch (e) {
+        out[`relay${i}`] = "ERR " + String(e).slice(0, 60);
+      }
     }
     tableProbes.push(out);
   }
-  return Response.json({ time: new Date().toISOString(), q, results, tableProbes }, {
+  // Probe header browser lengkap (mungkin lolos skor bot Cloudflare)
+  const fullHeaders = {
+    "User-Agent": UA,
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "id-ID,id;q=0.9,en;q=0.8",
+    "Cache-Control": "no-cache",
+    Referer: "https://www.google.com/",
+    "Sec-Ch-Ua": '"Chromium";v="126", "Google Chrome";v="126"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"macOS"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "cross-site",
+    "Upgrade-Insecure-Requests": "1",
+  };
+  let headerProbe;
+  try {
+    const res = await fetch("https://tanjabbarkab.bps.go.id/id/statistics-table/2/NTUjMg==/metode-baru-rata-rata-lama-sekolah-tahun.html", {
+      headers: fullHeaders,
+      cache: "no-store",
+      signal: AbortSignal.timeout(20000),
+    });
+    const h = await res.text();
+    headerProbe = { status: res.status, challenge: isChallengeHtml(h), length: h.length };
+  } catch (e) {
+    headerProbe = { error: String(e).slice(0, 80) };
+  }
+  // Probe webapi.bps.go.id (layanan API resmi — mungkin tak kena tantangan)
+  let webapiProbe;
+  try {
+    const res = await fetch("https://webapi.bps.go.id/v1/api/domain/1507/key/TEST", {
+      headers: { "User-Agent": UA, Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(20000),
+    });
+    const t = await res.text();
+    webapiProbe = {
+      status: res.status,
+      isJson: t.trim().startsWith("{"),
+      challenge: isChallengeHtml(t),
+      head: t.slice(0, 120).replace(/\s+/g, " "),
+    };
+  } catch (e) {
+    webapiProbe = { error: String(e).slice(0, 80) };
+  }
+  return Response.json({ time: new Date().toISOString(), q, results, tableProbes, headerProbe, webapiProbe }, {
     headers: { "cache-control": "no-store" },
   });
 }
